@@ -2,17 +2,23 @@
 //  ViewController.swift
 //  ARKit Vision Demo
 //
-//  Created by Rex Feng on 1/4/19.
+//  Created by Rex on 1/4/19.
 //  Copyright © 2019 Dev. All rights reserved.
 //
 
 import UIKit
 import SceneKit
 import ARKit
+import Vision
 
-class ViewController: UIViewController, ARSCNViewDelegate {
+class ViewController: UIViewController, ARSCNViewDelegate, ARSessionDelegate {
 
     @IBOutlet var sceneView: ARSCNView!
+    
+    var faceDetectionRequest: VNRequest!
+    var requests = [VNRequest]()
+    
+    var currentBuffer: CVPixelBuffer?
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -20,14 +26,13 @@ class ViewController: UIViewController, ARSCNViewDelegate {
         // Set the view's delegate
         sceneView.delegate = self
         
+        // Face detection
+        sceneView.session.delegate = self
+        faceDetectionRequest = VNDetectFaceRectanglesRequest(completionHandler: self.handleFaces)
+        self.requests = [faceDetectionRequest]
+        
         // Show statistics such as fps and timing information
         sceneView.showsStatistics = true
-        
-        // Create a new scene
-        let scene = SCNScene(named: "art.scnassets/ship.scn")!
-        
-        // Set the scene to the view
-        sceneView.scene = scene
     }
     
     override func viewWillAppear(_ animated: Bool) {
@@ -47,29 +52,53 @@ class ViewController: UIViewController, ARSCNViewDelegate {
         sceneView.session.pause()
     }
 
-    // MARK: - ARSCNViewDelegate
+    // MARK: - ARSessionDelegate
     
-/*
-    // Override to create and configure nodes for anchors added to the view's session.
-    func renderer(_ renderer: SCNSceneRenderer, nodeFor anchor: ARAnchor) -> SCNNode? {
-        let node = SCNNode()
-     
-        return node
-    }
-*/
-    
-    func session(_ session: ARSession, didFailWithError error: Error) {
-        // Present an error message to the user
+    func session(_ session: ARSession, didUpdate frame: ARFrame) {
+        guard currentBuffer == nil, case .normal = frame.camera.trackingState else {
+            return
+        }
+        self.currentBuffer = frame.capturedImage
         
+        classifyCurrentImage()
+    }
+
+    // MARK: - Vision usage
+    
+    func classifyCurrentImage() {
+        guard let buffer = currentBuffer else { return }
+       
+        let image = CIImage(cvPixelBuffer: buffer)
+        let options: [VNImageOption: Any] = [:]
+        let imageRequestHandler = VNImageRequestHandler(ciImage: image, orientation: self.imageOrientation, options: options)
+        
+        do {
+            try imageRequestHandler.perform(self.requests)
+        } catch {
+            print(error)
+        }
     }
     
-    func sessionWasInterrupted(_ session: ARSession) {
-        // Inform the user that the session has been interrupted, for example, by presenting an overlay
-        
+    func handleFaces(request: VNRequest, error: Error?) {
+        DispatchQueue.main.async {
+            guard let results = request.results as? [VNFaceObservation] else { return }
+            // TODO - something here with results
+            print(results)
+            
+            self.currentBuffer = nil
+        }
+    }
+
+    private var imageOrientation: CGImagePropertyOrientation {
+        switch UIDevice.current.orientation {
+        case .portrait: return .right
+        case .landscapeRight: return .down
+        case .portraitUpsideDown: return .left
+        case .unknown: fallthrough
+        case .faceUp: fallthrough
+        case .faceDown: fallthrough
+        case .landscapeLeft: return .up
+        }
     }
     
-    func sessionInterruptionEnded(_ session: ARSession) {
-        // Reset tracking and/or remove existing anchors if consistent tracking is required
-        
-    }
 }

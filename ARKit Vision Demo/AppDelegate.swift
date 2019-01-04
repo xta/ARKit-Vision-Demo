@@ -2,7 +2,7 @@
 //  AppDelegate.swift
 //  ARKit Vision Demo
 //
-//  Created by Rex Feng on 1/4/19.
+//  Created by Rex on 1/4/19.
 //  Copyright © 2019 Dev. All rights reserved.
 //
 
